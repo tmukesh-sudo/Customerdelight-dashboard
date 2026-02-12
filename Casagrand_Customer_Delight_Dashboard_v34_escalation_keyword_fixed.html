@@ -1,0 +1,1742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Casagrand - Customer Delight Dashboard</title>
+  <!-- Optional (online) Excel parser. Offline CSV always works. -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js">
+/* ===== Table filter + download helpers ===== */
+function tableToCSV(table){
+  const rows = [...table.querySelectorAll("tr")];
+  return rows.map(r=>{
+    const cols = [...r.querySelectorAll("th,td")].map(c=>{
+      const t = (c.innerText||"").replace(/\r?\n/g," ").trim();
+      return '"' + t.replace(/"/g,'""') + '"';
+    });
+    return cols.join(",");
+  }).join("\n");
+}
+function downloadText(filename, text){
+  const blob = new Blob([text], {type:"text/csv;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+function downloadTableCSV(tableId, filename){
+  const table = $(tableId);
+  if(!table) return;
+  downloadText(filename, tableToCSV(table));
+}
+function attachTableFilter(inputId, tableId){
+  const inp = $(inputId);
+  const tbl = $(tableId);
+  if(!inp || !tbl) return;
+  inp.addEventListener("input", ()=>{
+    const q = inp.value.trim().toLowerCase();
+    const rows = [...tbl.querySelectorAll("tr")];
+    rows.forEach((r,i)=>{
+      if(i===0) return;
+      const txt = (r.innerText||"").toLowerCase();
+      r.style.display = (!q || txt.includes(q)) ? "" : "none";
+    });
+  });
+}
+
+
+/* ===== Full Dashboard Export ===== */
+function downloadFullDashboard(){
+  const tables = document.querySelectorAll("table");
+  let combined = "";
+  tables.forEach((tbl, idx)=>{
+    if(idx>0) combined += "\n\n";
+    combined += tableToCSV(tbl);
+  });
+  downloadText("full_dashboard_report.csv", combined);
+}
+
+</script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    :root{
+      --bg:#0b1220; --card:rgba(255,255,255,.035); --line:rgba(255,255,255,.10);
+      --text:#eaf1ff; --muted:#a9b7d6; --accent:#ffb000; --accent2:#4cc3ff;
+      --good:#2ee59d; --bad:#ff5c7a; --shadow:0 12px 40px rgba(0,0,0,.35);
+      --r:18px;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:radial-gradient(900px 500px at 20% -10%, rgba(255,176,0,.20), transparent 60%),radial-gradient(700px 400px at 120% 0%, rgba(76,195,255,.18), transparent 60%),var(--bg);color:var(--text)}
+    .wrap{max-width:1320px;margin:0 auto;padding:14px 14px 28px}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r);background:rgba(255,255,255,.03);box-shadow:var(--shadow);position:sticky;top:10px;z-index:50;backdrop-filter: blur(10px)}
+    .brand{display:flex;align-items:center;gap:12px;min-width:280px}
+    .logoBox{width:190px;height:46px;border-radius:14px;display:grid;place-items:center;overflow:hidden;border:1px solid var(--line);background:rgba(0,0,0,.25)}
+    .logoBox img{height:40px;width:auto;display:block}
+    .titleWrap{display:flex;flex-direction:column;gap:2px}
+    h1{margin:0;font-size:16px;letter-spacing:.2px;line-height:1.2}
+    .sub{font-size:12px;color:var(--muted)}
+    .controls{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px}
+    .pill{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.03)}
+    .pill label{font-size:12px;color:var(--muted)}
+    select,input[type="date"]{background:transparent;border:none;color:var(--text);font-size:12px;outline:none}
+    select option{background:#0b1220}
+    input[type="file"]{font-size:12px;color:var(--muted)}
+    .btn{cursor:pointer;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);padding:8px 10px;border-radius:999px;font-size:12px}
+    .btn.primary{border-color:rgba(255,176,0,.55);box-shadow:0 0 0 3px rgba(255,176,0,.10) inset}
+    .btn:hover{background:rgba(255,255,255,.06)}
+    .grid{margin-top:12px;display:grid;grid-template-columns:1.35fr .65fr;gap:12px}
+    .stack{display:grid;gap:12px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:12px;min-width:0}
+    .card h2{margin:0 0 10px;font-size:13px;color:var(--text);font-weight:700}
+    .muted{color:var(--muted);font-size:12px}
+    .kpiGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+    .kpi{border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:10px 10px;background:rgba(0,0,0,.18);min-width:0}
+    .kpi .k{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .kpi .v{margin-top:6px;font-size:18px;font-weight:800;letter-spacing:.2px}
+    .kpi .s{margin-top:4px;font-size:11px;color:var(--muted)}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:8px 8px;border-bottom:1px solid rgba(255,255,255,.08);font-size:12px;vertical-align:top}
+    th{text-align:left;color:var(--muted);font-weight:600;white-space:nowrap}
+    .right{text-align:right}
+    .tag{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.10);font-size:11px;color:var(--muted)}
+    .warn{border:1px dashed rgba(255,176,0,.5);background:rgba(255,176,0,.08);padding:10px 12px;border-radius:16px;font-size:12px;color:#ffe8b6}
+    .footerNote{margin-top:10px;color:var(--muted);font-size:11px}
+    .modalBack{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:14px;z-index:1000}
+    .modal{max-width:1100px;width:100%;background:#0b1220;border:1px solid rgba(255,255,255,.12);border-radius:18px;box-shadow:var(--shadow);overflow:hidden}
+    .modalHead{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.10)}
+    .modalHead h3{margin:0;font-size:13px}
+    .modalBody{padding:10px 14px;max-height:70vh;overflow:auto}
+    @media (max-width: 1050px){ .grid{grid-template-columns:1fr} .kpiGrid{grid-template-columns:repeat(2,minmax(0,1fr))} header{position:relative;top:auto} }
+    @media (max-width: 520px){ .kpiGrid{grid-template-columns:1fr} .logoBox{width:160px} }
+  
+table th, table td { text-align:center; padding:6px 8px; }
+table th:first-child, table td:first-child { text-align:left; }
+
+
+/* Itrust / CCLE Alignment Fix */
+.section-itrust{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:12px;
+  margin-top:10px;
+}
+.section-itrust .kpi{
+  text-align:center;
+  padding:14px 10px;
+  min-height:110px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+}
+.section-itrust .kpi .v{
+  font-size:26px;
+  font-weight:700;
+  margin:8px 0 2px;
+}
+.section-itrust .kpi .k{
+  font-size:12px;
+  color:var(--muted);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.section-itrust .kpi .s{
+  font-size:11px;
+  color:var(--muted);
+}
+
+
+/* FTD/WTD/MTD table spacing + readability */
+#agentAssignedToTbl, #teamWideTbl{overflow-x:auto;
+  table-layout:auto !important;
+  min-width: 980px; /* forces horizontal scroll instead of squishing */
+}
+#agentAssignedToTbl th, #agentAssignedToTbl td,
+#teamWideTbl th, #teamWideTbl td{
+  padding:8px 10px !important;
+  font-size:11.5px !important;
+  line-height:1.15;
+}
+#agentAssignedToTbl th, #teamWideTbl th{
+  font-weight:700;
+}
+/* Make the container allow horizontal scroll smoothly */
+#agentAssignedToTbl{width:100%;}
+#teamWideTbl{width:100%;}
+
+
+/* Itrust / CCLE full width clean positioning */
+.card h2 + .section-itrust{
+  margin-top:12px;
+}
+.section-itrust{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:16px;
+  width:100%;
+}
+.section-itrust .kpi{
+  background:rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.06);
+  border-radius:14px;
+  text-align:center;
+  padding:18px 10px;
+  min-height:120px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+}
+.section-itrust .kpi .v{
+  font-size:30px;
+  font-weight:700;
+  margin:8px 0 4px;
+}
+.section-itrust .kpi .k{
+  font-size:13px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.section-itrust .kpi .s{
+  font-size:12px;
+  opacity:0.75;
+}
+
+
+/* ===== Professional Wide FTD/WTD/MTD Layout Upgrade ===== */
+.ftd-container{
+  width:100%;
+  overflow-x:auto;
+  padding:16px 10px 12px;
+  border-radius:16px;
+  background:rgba(255,255,255,0.02);
+  border:1px solid rgba(255,255,255,0.06);
+}
+
+#agentAssignedToTbl,
+#teamWideTbl{
+  min-width:1200px !important;  /* larger width */
+  border-collapse:collapse;
+}
+
+#agentAssignedToTbl th,
+#teamWideTbl th{
+  font-size:12px;
+  padding:10px 12px !important;
+  white-space:nowrap;
+}
+
+#agentAssignedToTbl td,
+#teamWideTbl td{
+  font-size:13px;
+  padding:10px 12px !important;
+  white-space:nowrap;
+}
+
+#agentAssignedToTbl td{
+  font-weight:500;
+}
+
+.card h2{
+  margin-bottom:10px;
+}
+
+
+/* Header logo visibility fix */
+.headerWrap{
+  display:flex;
+  align-items:center;
+  gap:14px;
+}
+.logoBox{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:220px;
+  height:74px;
+  border-radius:16px;
+  background:rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.08);
+  overflow:hidden;
+}
+.logoBox img{
+  max-width:200px;
+  max-height:56px;
+  width:auto;
+  height:auto;
+  object-fit:contain;
+  display:block;
+}
+.titleBox h1{
+  line-height:1.15;
+}
+
+
+/* Final Logo Visibility Fix */
+.logoBox{
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  width:320px !important;
+  height:90px !important;
+  padding-left:12px;
+  border-radius:18px;
+  background:transparent !important;
+  border:none !important;
+  overflow:visible !important;
+}
+.logoBox img{
+  max-width:300px !important;
+  max-height:80px !important;
+  width:auto !important;
+  height:auto !important;
+  object-fit:contain;
+}
+
+
+/* ===== Header Horizontal Fix ===== */
+.headerWrap{
+  display:flex !important;
+  flex-direction:row !important;
+  align-items:center !important;
+  justify-content:flex-start !important;
+  gap:18px !important;
+  flex-wrap:nowrap !important;
+}
+
+.titleBox{
+  min-width:520px !important;
+}
+
+.titleBox h1{
+  white-space:nowrap !important;
+  word-break:normal !important;
+  font-size:28px !important;
+}
+
+.titleBox .muted{
+  white-space:nowrap !important;
+}
+
+
+/* ===== Force True Horizontal Header ===== */
+.headerWrap{
+  display:flex !important;
+  flex-direction:row !important;
+  align-items:center !important;
+  justify-content:flex-start !important;
+  width:100% !important;
+}
+
+.titleBox{
+  flex:1 1 auto !important;
+  display:block !important;
+  min-width:600px !important;
+}
+
+.titleBox h1{
+  font-size:30px !important;
+  white-space:nowrap !important;
+  overflow:visible !important;
+  text-align:left !important;
+}
+
+.titleBox .muted{
+  display:block !important;
+  margin-top:6px !important;
+  white-space:nowrap !important;
+}
+
+
+/* ===== Header Layout: Keep Title Horizontal ===== */
+header{
+  flex-wrap:wrap !important;
+}
+.brand{
+  display:flex !important;
+  align-items:center !important;
+  gap:14px !important;
+  flex: 1 1 520px !important; /* give brand area enough width */
+  min-width:520px !important;
+}
+.titleWrap{
+  min-width:520px !important;
+}
+.titleWrap h1{
+  font-size:28px !important;
+  white-space:nowrap !important;
+  display:inline-block !important;
+  width:max-content !important;
+}
+.sub{
+  white-space:nowrap !important;
+}
+.controls{
+  flex: 1 1 520px !important;
+  justify-content:flex-end !important;
+}
+@media (max-width: 900px){
+  header{flex-direction:column !important; align-items:flex-start !important;}
+  .controls{width:100% !important; justify-content:flex-start !important;}
+}
+
+
+/* ===== Reduced Header Font Size ===== */
+.titleWrap h1{
+  font-size:22px !important;
+  font-weight:600 !important;
+}
+
+.sub{
+  font-size:14px !important;
+}
+
+
+/* ===== Further Reduced Header Font ===== */
+.titleWrap h1{
+  font-size:20px !important;
+  font-weight:600 !important;
+  letter-spacing:0.3px;
+}
+.sub{
+  font-size:13px !important;
+}
+
+
+/* ===== Reduce Logo Size ===== */
+.logoBox{
+  width:260px !important;
+  height:70px !important;
+}
+.logoBox img{
+  max-width:220px !important;
+  max-height:60px !important;
+}
+
+
+/* ===== Further Reduce Logo Size ===== */
+.logoBox{
+  width:220px !important;
+  height:60px !important;
+}
+.logoBox img{
+  max-width:190px !important;
+  max-height:50px !important;
+}
+
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <div class="logoBox"><img alt="Casagrand" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAaMAAACKCAMAAAAwn9WMAAAAAXNSR0IB2cksfwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAFRQTFRFAAAA+7I5/rM4/LI4/LM5/7c4+7M4+7M4/LI3qq25sra+qqqyrrO8vsLJ1Nbb6+zu////4uTnztDWub7Ft7nC9PX2293hw8bNyMvR/rM5/7U1/LI4e+vb7gAAABx0Uk5TAI+/n/8ggEDvPHAfV6/m+//225yH/u/Azq8wYNjiAhMAAA21SURBVHic7ZzpoqM4DoUzU92VYocQIDPz/u85LJYsybIDuUnu0jp/qm4A2+iTZXlJTieTyWQymUwmk8lkMplMJpPJZDKZTCaTyWQymUwmk8n0FfWvfx/WZzf5n6Zffx3XZ7f5H6ZHEBmjt+ohRMbonXoMkTF6ox5EZIzep0cRGaO36WFExuhdehyRMXqTPoDIGL1HH0FkjN6iDyEyRu/QxxAZozfog4iM0ev1UUTG6OX6MCJj9Gp9HJExerGegMgYvVbPQGSMXqqnIDJGr9RzEBmjF+pJiIzR6/QsRMboZXoaImP0Kj0PkTF6kf7+fVRxqJ/9LibQ2Rh9eRmjry9j9PVljL6+jNHXlzH6+goZ/dnNKMvzvHhSO8q5rDx7UmGLlvLyJ5b3iQoY/fq9h1FW1U27qbv0CVC9u+uaKOx6gbLmwq7xwkp3U3XnnebGDe7WYawU8K2i8ZJqYuEKvKhXXQnapamVF6ew6nFKvHXI6NdpB6N8FLVcoj2gdnfUsRuKaeBlDZeY+18AZKJpc+NqXl47BuVpjGY1fbRQcLVWtaW7NimX9jDabohXfpaI7jMqJaFFN90RMrwhQvE6KIWFVl2Ft5bRtp0yrXGjqDzCaL4x5s5YqmpJuKj0xN2MEi5ylojuMorU0aiGq/C6HqBuMWMpSNGX21usbadeQz73Tf76MSvF3oK4mtqHsZrw6QOM5sL12s8S0R1GheanWwM158eBpm200mKIWq3f+ZoHvW0+GoZikOK1toPak0g7tXjgjRw8fYhRO6hj4lkiSjMqukQFoRfk5LLiI9d4YeHgnJGrkagQR8QfSdymdxTvamof9leDYfcYI/3NzhJRklEK0Qwp8DFqNCUlaqJFKe5K303PQFKImI8k71NGfupLWh9OPH2UkTameUb/cZ+kGFEr1H2eFfn1Rgwts8+Cjg7hy/kBZuwXJqUvTPFWBlSLOBW5funLtTzSABJs4aMqB139mynRjmWKihETl+OMOqi7ulHPDx2dMPrtPkkwIlYg2XbvrSca2LdUQTfWkqX8ErFTzspSMpDSX61J4wblGfiEjqAl3hh0pIJVrfRhellE/Dgj6tAlcf5wmnWEke8WfGwrcBIkTMvzi6ByuMCjYFar8ca9hWuCkoF4Z2TOgI0jebXGyDMOyq5Y1coUib0mzxv2MZpd0PtS4MtHGGF2E2QHdQju5Ed56E6iF2PPkAnhNUyP0JeryDOkz8pLG13a8/Q7caCQ0cbRh0Ac9mHGiLvcXkZkqA985AAj3+WDkFw02vzvBnW6lxO9AxkFNSlyCAYwWJCBYMANTdjJeY/OCBNH4cjQwTL3PmHmxxmxFuxmRIKtNO8BRjgaKRlaPigjBPodwuLP6KbShWgAlvAITL2UVbNMBuFIxeDJwpcugAZgBbMIwYiWu5+Rt68c8Q4wQk/VkirlsyveXoZtPxFG6mIklzcP9Gbh7HWqcdKoEUYwfApGA7gaWCDwUcmI5GYHGHkDi8/3M8JQoK/9hqp9W9QA5TM1mWuEIj2RFEt0gPdBRjDQFWjeYBYhGZG84QgjHFJFu/Yzwq6YWNGkog4PzxbaDctb3+4UOnjrqRkI8o6vHhNFbAEDAmfkfGIJQFmkEijPT0LQG48wQoOIjryfEaTw0cUyIchYi+jLsUWL5pbYQ/Fh088A2ItgTrZrz1FnhMk3G7NZ0zvPSyvv6t8IhucjjLAji/KjjP7ECtgVTU4ivrk/eErEp7jL5SnSnVh8c87CMpB9W0sgnZE+pLH4Vml3kPJ8bgbR5hCjm34pxujPf2UB0JG1nSxF4JXXxMspa+iNFvV4N7yyknlJ+8ZKlRF6DOfM8gRoiLCBL8+v7LnE8xAjuCRCVYRRiAgbspMR93YItXwdTl+iDfe6xHCm7FtHUrKINEZ+nYtVDwOd85yavZVSnl8x3VAfYhSZMeqMFERHGQ0cSq16SGQ3Su51iZwXAhsZe3RGuShXvko3onyQ4jMvEVihs/EoSRiR9de1uS9jpCE6yAhephR/yzl0r+9PMF8uxbN5eNNjjFTxpUhRLvzNYyo8ujAq+LrhqxipiGKz8IicO2Fsh5cLV417tS9RSLCcih80onDPiMfSRxhx6weJPsQD1tkooxPPGw4xwnjLP1YY6YhiiaEuGFz9CpESoPDmKsREpuqFCJs+//EhEUoXi8nHGYmkI8hHAZq6975FQJY3PJQziOw0ZPQ/HREaRj2YEKvNWxparp89KcgZO2ksGTZ98PPU9IzoOCOxt6jM6wbFjJwRyxsemh/dzb1jwtx0zzqDM/jgB+URmx1TeWOYsMNhy4OyPBGkwUaTo4yCM2Pgl0pyQWcRghHJG26HGOFT/OP9jIpICZqkcahSiOnhSrB2Fi/KE8HGpQ6S3mUUhHH9JFhgBfgMGJG8Af53aL1OTD72M0J/1o83MaVOf6SnmT5OQG6SON9FjJpc944xukybYjs3iXNLLOTDZ9gNywDuHkbooOIdDjBCzFpmN9LXKxL+d2+97yJrSRweIm+DjVNdwF0Tf6JN0TEa7n7yVDLTNSiezJoCujsYYfCRw8EBRqmzvHPFo/80WIhj8j1ZOy+PLZ0ib8uEGUgR3cU8ee7wd2BT9APmfvysiRRxhqC88ITWfUZFdCf5CCOsNzhftCVaeOY7eQrPB6isVXZvJaP0oTkfcXzjAg/CIuCDwKZ+/KRvRg+DKUqfYRF98D4jjHTBWHKEkXc3YQcIv87kOMrzNAl7F9hhsV0nUykRUdGX+TiKRsWGkENLvHFkvQk+CtuHFqWW0w/7YYvSZ8HEWuQ9RuT2YCg5xMi726CdqwC3jsykCrGH5lB2/KgVtpUvmEvnAvv5iEO8fiI301P68FloUy1U4n6S6JjhPojG6JSxQfkOoz62XrgIGUVWF7hIjtW4b4ZlFRnUtxfU9zP9yzX8z3a49NC1yPLdVjwgk6mAMmkleXszZWHjUow8YZ82iOaicIREdiojPgFJMCpyNjEMx9PzEURipFlmdswGNX8HOWrxg0B83jPQuakvq2SPECkHrXg2ObDF7E0pm+Kb3WRxwZg5iDtje+90PNt93luZfZ4PIUofyncnLSC2hysKLEClkwH3vvEFKGXdJJyVCKVs6r3edY9g+ERBo7APa+WJV9zLSJs6nA8hSkJyiCKjPG3eGnLTyZ9zp8BlUZoJ70FK2hTjuDNnfA0ZOze8oVoeN9ZORurs7nwM0VxvzP8vLpBjDw+XI3iAqhIWda8U9+UgA9kq0MFDk+A2+DxXC9xaFzu1ughqAXxqeWshWOYuRoN+qul8ENEpYtsGhzoIaNoeBg9QwdeVUeBO8bAZGdILZeVouN5bZ9iEDrF2c9bnpQXgzixV3iLlnGecUa2uY62MDiLSulLjs139BJST7BdFpa30NMFyquZfmJqIU9tyAWfp3+6/cE/EppiyLJE1TO6JAeDGKlneIsB5n1H06/Qzo8OIZmUTse3AftkgeQyvCMeXchIbfLUHkj41F7NiRlLZ4bZ6wz5G/htMZcwDnMAPmmR51B5pRk3yNy7OjyBalF2nqa6nqRczvNJ9O03fgtCv5v1Ur7n3VOX3795xdWncRNrm7jzxP4MfaYES82z9DZf4T6WIq7HyFhWykfgs6t6G3N8PIjKZTCbTp2iKftls2tIQuiaRu3nVtOuLFjuUTXu+6va06r6p4owcHI3R7q8Y3FOeOniItTytum+qOCOXOWmM7iZVe1Wkfn0Pa35add9UM6Nsgu33cj3X6+wmGfVTf+WM5n/6Cad55TSVJfvxhn5O5CGznvN691Wp9SkXvVxdyz9ZKZ7Jlx/MyEh1p6LHls5PFBV+qSerpuoHc5zaZb7odmHHZcIqApr7xy3q8Utd52fWNz7jPblJarNB6NpxdDP07altDu3qyttbvZVJnvH1uerKZZbtVufydv1FxM1B+rYZm7s/ovh9NS0b77mzQoLRONugmMSldiqKZlvPuLZdtliRFL3sQU6wpVIuC07+qXELsciobbauRZ4JxqNuyGdX2Y6F5AuscluSzNZVzv4nM1qMNW6GjjMqV7tpl26bteu1hDH42Yjt1pGeNRnXktbuh4zq8BnJaHvkCk8s/3Stv/CDtTFymUOcUbWGFe2SexRYkKKz27LhPG61dLjE5IKaszuxuHhGMmIVbU9s1RVDe3vazwh/Re1ktN1wiFE5DJcKoujyW14NnXDpjNgzexmdymWAu/9TCN9WwGj18g8wGjoswOmyXkBDl9Wwba6snxRbdJOM2DO7GS3fIKl3/wLG99P25t2Wcq3Dhsrousb8BKN6oVx0hNFmQLa/4I183dIwyYg9IxiV4XhEXeIHT3Sn5Vxd5Wx0my2XN2peN8xJVd7FGc2J1rRsQfmSL/PNmUupb9uXXtdwtPxUVNlsO7VhP/LPnJo5hctIdV1L8zrPKF/2SssfnDhM6y/MuZMv60mCi8po3b7TLsFCxbWZ82fq2K6w9dZ6ncG48WgVTHM4I/rMuq8Xnx95RuXyLSvll3N/jLI86/2a5Txhz8Q6A0zys0m/lNGUqqPnJNaFAHdrWeESQTuW0+SXC8g/4pm5g0yJdYaTWxdZRqNp0g4ZmIQWm+V7Bu4fPHB8dc3RrNN+eza80Rh9lpbDFdWeMWH8uYO7yWQymUwmk8lkMplMJpPJZDKZTCaTyWQymUwmk+nH6/9TPVAjwxNgBgAAAABJRU5ErkJggg=="></div>
+        <div class="titleWrap">
+          <h1>Casagrand - Customer Delight Dashboard</h1>
+          <div class="sub" id="fileStatus">Upload Excel/CSV to view metrics</div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="pill">
+          <label>Upload</label>
+          <input id="file" type="file" accept=".xlsx,.xls,.csv" />
+        </div>
+
+        <button class="btn primary" id="btnDay">Day</button>
+        <button class="btn" id="btnWTD">WTD</button>
+        <button class="btn" id="btnMTD">MTD</button>
+        <button class="btn" id="btnQTD">QTD</button>
+        <button class="btn" id="btnYTD">YTD</button>
+
+        <div class="pill">
+          <label>From</label><input id="from" type="date">
+          <label>To</label><input id="to" type="date">
+          <button class="btn" id="apply">Apply</button>
+        </div>
+
+        
+        <div class="pill">
+          <label>Created By</label>
+          <select id="createdBy"><option value="">All</option></select>
+        </div>
+
+<div class="pill">
+          <label>Assigned To</label>
+          <select id="assignedTo"><option value="">All</option></select>
+        </div>
+
+        <div class="pill">
+          <label>Assigned Dept</label>
+          <select id="assignedDept"><option value="">All</option></select>
+        </div>
+
+        <div class="pill">
+          <label>Exclude Inbound</label>
+          <select id="excludeInbound">
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </div>
+
+
+
+        <button class="btn" id="tatBtn">TAT Breaches</button>
+      
+        <button class="btn" onclick="downloadFullDashboard()">Export Full Dashboard (Excel CSV)</button>
+      </div>
+    </header>
+
+    <div id="offlineNote" class="warn" style="display:none;margin-top:12px">
+      Excel offline parsing is not available in this file without the XLSX library. <b>CSV upload works fully offline.</b> 
+      If you must upload Excel offline: export your sheet as CSV and upload, or open with internet once to allow XLSX loading.
+    </div>
+
+    <div class="grid">
+      <div class="stack">
+        <div class="card">
+          <h2>Primary KPIs</h2>
+          <div class="kpiGrid" id="kpis"></div>
+          <div class="footerNote">Ageing buckets used everywhere: ≤7 days, 8–30 days, &gt;30 days. Closed is taken from <b>Status 2</b>.</div>
+        </div>
+
+        <div class="card">
+          <h2>Overall / Team / Category</h2>
+          <div class="muted" style="margin-bottom:8px">Overall tickets, Team-wise tickets (Created by Department), and Category split (Tech / Non-Tech / Refund).</div>
+          <div class="stack" style="grid-template-columns:1fr;gap:10px">
+            <div>
+              <div class="tag">Overall Tickets</div>
+              <div id="overallMini" style="margin-top:8px"></div>
+            </div>
+            <div>
+              <div class="tag">Team-wise Tickets</div>
+              <div style="margin-top:8px;overflow:auto"><table id="teamTbl"></table></div>
+            </div>
+            <div>
+              <div class="tag">Category</div>
+              <div style="margin-top:8px;overflow:auto">
+              <div class="row" style="justify-content:space-between;align-items:center;gap:10px;margin:6px 0 8px">
+                <div class="muted" style="font-size:12px">Category Filter</div>
+                <div class="row" style="gap:8px">
+                  <input id="catFilter" placeholder="Search..." style="width:220px;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.10);background:rgba(0,0,0,0.20);color:var(--text)"/>
+                  <button class="btn" onclick="downloadTableCSV('catTbl','category.csv')">Download (Excel CSV)</button>
+                </div>
+              </div>
+<table id="catTbl"></table></div>
+            </div>
+
+            <div>
+              <div class="tag">Category Ageing (Open)</div>
+              <div style="margin-top:8px;overflow:auto">
+              <div class="row" style="justify-content:space-between;align-items:center;gap:10px;margin:6px 0 8px">
+                <div class="muted" style="font-size:12px">Category Ageing Filter</div>
+                <div class="row" style="gap:8px">
+                  <input id="catAgeFilter" placeholder="Search..." style="width:220px;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.10);background:rgba(0,0,0,0.20);color:var(--text)"/>
+                  <button class="btn" onclick="downloadTableCSV('catAgeTbl','category_ageing.csv')">Download (Excel CSV)</button>
+                </div>
+              </div>
+<table id="catAgeTbl"></table></div>
+            </div>
+            <div>
+              <div class="tag">Assigned To (Overall)</div>
+              <div style="margin-top:8px;overflow:auto">
+              <div class="row" style="justify-content:space-between;align-items:center;gap:10px;margin:6px 0 8px">
+                <div class="muted" style="font-size:12px">Assigned To Overall Filter</div>
+                <div class="row" style="gap:8px">
+                  <input id="assToOverallFilter" placeholder="Search..." style="width:220px;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.10);background:rgba(0,0,0,0.20);color:var(--text)"/>
+                  <button class="btn" onclick="downloadTableCSV('assToOverallTbl','assigned_to_overall.csv')">Download (Excel CSV)</button>
+                </div>
+              </div>
+<table id="assToOverallTbl"></table></div>
+            </div>
+            <div>
+              <div class="tag">Assigned Department (Overall)</div>
+              <div style="margin-top:8px;overflow:auto">
+              <div class="row" style="justify-content:space-between;align-items:center;gap:10px;margin:6px 0 8px">
+                <div class="muted" style="font-size:12px">Assigned Dept Overall Filter</div>
+                <div class="row" style="gap:8px">
+                  <input id="assDeptOverallFilter" placeholder="Search..." style="width:220px;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.10);background:rgba(0,0,0,0.20);color:var(--text)"/>
+                  <button class="btn" onclick="downloadTableCSV('assDeptOverallTbl','assigned_dept_overall.csv')">Download (Excel CSV)</button>
+                </div>
+              </div>
+<table id="assDeptOverallTbl"></table></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Day-wise & Week-wise (New / Closed / Open / Remaining)</h2>
+          <div class="stack" style="grid-template-columns:1fr 1fr;gap:12px">
+            <div style="min-width:0">
+              <div class="tag">Day-wise</div>
+              <div style="margin-top:8px;overflow:auto">
+              <div class="row" style="justify-content:space-between;align-items:center;gap:10px;margin:6px 0 8px">
+                <div class="muted" style="font-size:12px">Day-wise Filter</div>
+                <div class="row" style="gap:8px">
+                  <input id="dayFilter" placeholder="Search..." style="width:220px;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.10);background:rgba(0,0,0,0.20);color:var(--text)"/>
+                  <button class="btn" onclick="downloadTableCSV('dayTbl','day_wise.csv')">Download (Excel CSV)</button>
+                </div>
+              </div>
+<table id="dayTbl"></table></div>
+            </div>
+            <div style="min-width:0">
+              <div class="tag">Week-wise (Mon–Sun)</div>
+              <div style="margin-top:8px;overflow:auto">
+              <div class="row" style="justify-content:space-between;align-items:center;gap:10px;margin:6px 0 8px">
+                <div class="muted" style="font-size:12px">Week-wise Filter</div>
+                <div class="row" style="gap:8px">
+                  <input id="weekFilter" placeholder="Search..." style="width:220px;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.10);background:rgba(0,0,0,0.20);color:var(--text)"/>
+                  <button class="btn" onclick="downloadTableCSV('weekTbl','week_wise.csv')">Download (Excel CSV)</button>
+                </div>
+              </div>
+<table id="weekTbl"></table></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Department-wise Ageing & Assigned-wise Ageing (Open)</h2>
+          <div class="stack" style="grid-template-columns:1fr 1fr;gap:12px">
+            <div>
+              <div class="tag">By Department (Assigned To Department)</div>
+              <div style="margin-top:8px;overflow:auto">
+              <div class="row" style="justify-content:space-between;align-items:center;gap:10px;margin:6px 0 8px">
+                <div class="muted" style="font-size:12px">Dept Ageing Filter</div>
+                <div class="row" style="gap:8px">
+                  <input id="deptAgeFilter" placeholder="Search..." style="width:220px;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.10);background:rgba(0,0,0,0.20);color:var(--text)"/>
+                  <button class="btn" onclick="downloadTableCSV('deptAgeTbl','dept_ageing.csv')">Download (Excel CSV)</button>
+                </div>
+              </div>
+<table id="deptAgeTbl"></table></div>
+            </div>
+            <div>
+              <div class="tag">By Assigned To</div>
+              <div style="margin-top:8px;overflow:auto"><table id="assAgeTbl"></table></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="padding:14px 14px 10px">
+          <h2>Assigned To-wise & Assigned Department-wise (FTD / WTD / MTD)</h2>
+          <div class="muted" style="margin-bottom:8px">FTD/WTD/MTD/QTD/YTD split: Open (Outstanding) / New Created / Closed / Remaining Open.</div>
+          <div class="stack" style="grid-template-columns:1fr;gap:10px">
+            <div>
+              <div class="tag">Assigned To-wise</div>
+              <div style="margin-top:8px;overflow:auto"><div class="ftd-container">
+              <div class="row" style="justify-content:space-between;align-items:center;gap:10px;margin:6px 0 8px">
+                <div class="muted" style="font-size:12px">Assigned To-wise Filter</div>
+                <div class="row" style="gap:8px">
+                  <input id="agentAssignedToFilter" placeholder="Search..." style="width:220px;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.10);background:rgba(0,0,0,0.20);color:var(--text)"/>
+                  <button class="btn" onclick="downloadTableCSV('agentAssignedToTbl','assigned_to_wise.csv')">Download (Excel CSV)</button>
+                </div>
+              </div>
+<table id="agentAssignedToTbl"></table></div></div>
+            </div>
+            <div>
+              <div class="tag">Assigned Department-wise</div>
+              <div style="margin-top:8px;overflow:auto"><div class="ftd-container">
+              <div class="row" style="justify-content:space-between;align-items:center;gap:10px;margin:6px 0 8px">
+                <div class="muted" style="font-size:12px">Assigned Dept-wise Filter</div>
+                <div class="row" style="gap:8px">
+                  <input id="teamWideFilter" placeholder="Search..." style="width:220px;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.10);background:rgba(0,0,0,0.20);color:var(--text)"/>
+                  <button class="btn" onclick="downloadTableCSV('teamWideTbl','assigned_dept_wise.csv')">Download (Excel CSV)</button>
+                </div>
+              </div>
+<table id="teamWideTbl"></table></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stack">
+        <div class="card">
+          <h2>Quality / Surveys</h2>
+          <div id="qualityBox"></div>
+        </div>
+
+        <div class="card">
+          <h2>Escalations (TAT 5 Days)</h2>
+          <div id="escBox"></div>
+          <div class="footerNote">“Escalation TAT breach” = Open Escalation tickets with Age &gt; 5 days (MD Desk / Internal Desk / Social Media / Escalation).</div>
+        </div>
+
+        <div class="card">
+          <h2>Budget & Revenue</h2>
+          <div id="moneyBox"></div>
+          <div class="footerNote">Budget/Revenue values are summed if present in file. If not available, this will show 0.</div>
+        </div>
+
+        <div class="card">
+          
+      </div>
+    </div>
+  </div>
+
+  <div class="modalBack" id="modalBack">
+    <div class="modal">
+      <div class="modalHead">
+        <h3>TAT Breaches (Escalation Open &gt; 5 days)</h3>
+        <button class="btn" id="closeModal">Close</button>
+      </div>
+      <div class="modalBody">
+        <div class="muted" id="breachMeta" style="margin-bottom:10px"></div>
+        <div style="overflow:auto"><table id="breachTbl"></table></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+const $ = (id)=>document.getElementById(id);
+function safeText(v){ return (v===undefined||v===null) ? "" : String(v); }
+function toNum(v){ if(v===null||v===undefined||v==="") return null; const n=Number(String(v).replace(/,/g,'')); return Number.isFinite(n)?n:null; }
+function fmtInt(n){ return Number.isFinite(n)? Math.round(n).toLocaleString('en-IN') : "0"; }
+function fmtMoney(n){ return Number.isFinite(n)? n.toLocaleString('en-IN',{maximumFractionDigits:2}) : "0"; }
+function pct(a,b){ if(!b) return "0%"; return ((a/b)*100).toFixed(1).replace(/\.0$/,'')+"%"; }
+
+function formatDDMMYY(d){
+  if(!d) return "";
+  const dd = String(d.getDate()).padStart(2,'0');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const yy = String(d.getFullYear()).slice(-2);
+  return dd + "/" + mm + "/" + yy;
+}
+
+
+function formatDDMMYYYY(d){
+  if(!d) return "";
+  const dd = String(d.getDate()).padStart(2,'0');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const yyyy = String(d.getFullYear());
+  return dd + "-" + mm + "-" + yyyy;
+}
+
+function parseDate(v){
+  if(v===undefined || v===null || v==="") return null;
+
+  // Excel serial date (days since 1899-12-30)
+  if (typeof v === "number" && isFinite(v)){
+    // common ticket dates will be > 40000 (approx year 2009+)
+    if (v > 20000 && v < 80000){
+      const epoch = new Date(Date.UTC(1899, 11, 30));
+      const d = new Date(epoch.getTime() + v * 86400000);
+      // normalize to local date
+      return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    }
+  }
+
+  if(v instanceof Date && !isNaN(v)) return v;
+
+  const s=String(v).trim();
+
+  // dd-mm-yyyy or dd/mm/yyyy
+  const m1=s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})/);
+  if(m1){
+    const d=parseInt(m1[1],10), mo=parseInt(m1[2],10)-1, y=parseInt(m1[3],10);
+    return new Date(y<100?2000+y:y, mo, d);
+  }
+
+  // yyyy-mm-dd
+  const m2=s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+  if(m2){
+    const y=parseInt(m2[1],10), mo=parseInt(m2[2],10)-1, d=parseInt(m2[3],10);
+    return new Date(y, mo, d);
+  }
+
+  const d2=new Date(s);
+  return isNaN(d2)?null:d2;
+}
+function ymd(d){
+  const z=new Date(d);
+  const mm=String(z.getMonth()+1).padStart(2,'0');
+  const dd=String(z.getDate()).padStart(2,'0');
+  return `${z.getFullYear()}-${mm}-${dd}`;
+}
+function startOfWeek(d){ const x=new Date(d); const day=(x.getDay()+6)%7; x.setDate(x.getDate()-day); x.setHours(0,0,0,0); return x; }
+function startOfMonth(d){ const x=new Date(d); x.setDate(1); x.setHours(0,0,0,0); return x; }
+function startOfQuarter(d){ const x=new Date(d); const q=Math.floor(x.getMonth()/3)*3; x.setMonth(q,1); x.setHours(0,0,0,0); return x; }
+function startOfYear(d){ const x=new Date(d); x.setMonth(0,1); x.setHours(0,0,0,0); return x; }
+
+// CSV parser (basic, supports quotes)
+function parseCSV(text){
+  const rows = [];
+  let cur = [], val = "", inQ=false;
+  for (let i=0;i<text.length;i++){
+    const c=text[i];
+    if (inQ){
+      if (c === '"'){
+        if (text[i+1] === '"'){ val+='"'; i++; }
+        else inQ=false;
+      } else val += c;
+    } else {
+      if (c === '"') inQ=true;
+      else if (c === ','){ cur.push(val); val=""; }
+      else if (c === '\n'){ cur.push(val); rows.push(cur); cur=[]; val=""; }
+      else if (c === '\r'){ }
+      else val += c;
+    }
+  }
+  if (val.length || cur.length){ cur.push(val); rows.push(cur); }
+  while (rows.length && rows[rows.length-1].every(x=>String(x).trim()==="")) rows.pop();
+  return rows;
+}
+
+let RAW = [];
+let COLS = [];
+let NOW = new Date();
+let FILTER = {from:null,to:null, createdBy:"", assignedTo:"", assignedDept:"", excludeInbound:"no"};
+
+function getCol(cands){ for (const c of cands) if (COLS.includes(c)) return c; return null; }
+function norm(s){ return String(s||"").trim(); }
+function isClosed(r){ const c = norm(r[getCol(["Status 2","Status2","Status_2"])]); return c.toLowerCase() === "closed"; }
+function isOpen(r){ return !isClosed(r); }
+function getAge(r){
+  const a = toNum(r["Age"]);
+  if (a!==null) return a;
+  const ag = norm(r["Ageing"]);
+  const m = ag.match(/(\d+)/);
+  return m? Number(m[1]) : 0;
+}
+function bucketAge7_30(age){ if (age<=7) return "≤7"; if (age<=30) return "8–30"; return ">30"; }
+function isNonTech(r){ const c2 = norm(r["Category 2"]).toLowerCase(); return c2.includes("non") && c2.includes("tech"); }
+function isRefund(r){ const s = (norm(r["Category"])+" "+norm(r["Category 2"])+" "+norm(r["Sub Category"])).toLowerCase(); return s.includes("refund") || s.includes("reversal") || s.includes("credit") || s.includes("cancellation"); }
+function isTech(r){ return !isNonTech(r) && !isRefund(r); }
+function isEscalation(r){
+  // Escalation definition (as per your latest clarification):
+  // If Assigned Department contains "Escalation" / "Escalations" (or similar).
+  // Also supports legacy sources if present.
+  const deptCol = getCol(["Assigned To Department","Assigned Department","Assigned Dept","Assigned To Dept","Assigned Dept."]);
+  const srcCol  = getCol(["Ticket Source","Source"]);
+  const cat2Col = getCol(["Category 2","Category2","Category_2","Sub Category","Subcategory"]);
+
+  const dept = norm(r[deptCol]).toLowerCase();
+  const src  = norm(r[srcCol]).toLowerCase();
+  const cat2 = norm(r[cat2Col]).toLowerCase();
+
+  return (
+    dept.includes("escal") ||
+    src.includes("escal")  ||
+    cat2.includes("escal")
+  );
+}
+function escType(r){
+  const ts = norm(r["Ticket Source"]).toLowerCase();
+  if (ts.includes("md desk")) return "MD Desk";
+  if (ts.includes("internal desk")) return "Internal Desk";
+  if (ts.includes("social media")) return "Social Media";
+  if (ts.includes("escalation")) return "Escalation";
+  return "Other";
+}
+function inRange(d, from, to){
+  if (!d) return false;
+  const t = d.getTime();
+  return (!from || t >= from.getTime()) && (!to || t <= to.getTime());
+}
+function groupCounts(rows, keyFn){
+  const map = new Map();
+  rows.forEach(r=>{
+    const k = keyFn(r) || "—";
+    if(!map.has(k)) map.set(k, []);
+    map.get(k).push(r);
+  });
+  return map;
+}
+function tableFromRows(headers, rows){
+  const thead = "<thead><tr>"+headers.map(h=>`<th>${h}</th>`).join("")+"</tr></thead>";
+  const tbody = "<tbody>"+rows.map(r=>"<tr>"+r.map((c,i)=>`<td class="${i===0?'':'right'}">${c}</td>`).join("")+"</tr>").join("")+"</tbody>";
+  return thead+tbody;
+}
+function startEndOfToday(){
+  const t=new Date(); t.setHours(0,0,0,0);
+  const t2=new Date(t); t2.setHours(23,59,59,999);
+  return [t,t2];
+}
+
+function applyFilters(){
+  const createdDateCol = getCol(["Ticket Created Date","Created Date","Ticket Created"]);
+  const closedDateCol = getCol(["Ticket Closed Date","Closed Date","Ticket Closed"]);
+  const createdByCol = getCol(["Created By"]);
+  const assignedToCol = getCol(["Assigned To"]);
+  const assignedDeptCol = getCol(["Assigned To Department"]);
+
+  const from = FILTER.from, to = FILTER.to;
+  const cb = FILTER.createdBy, at = FILTER.assignedTo, ad = FILTER.assignedDept;
+
+  const rows = RAW.filter(r => {
+    const cd = parseDate(r[createdDateCol]);
+    if (!inRange(cd, from, to)) return false;
+
+    if (FILTER.excludeInbound==="yes"){
+      if (norm(r[assignedDeptCol]).toLowerCase()==="inbound") return false;
+    }
+
+    if (cb && norm(r[createdByCol]) !== cb) return false;
+    if (ad && norm(r[assignedDeptCol]) !== ad) return false;
+    if (at && norm(r[assignedToCol]) !== at) return false;
+
+    return true;
+  });
+
+  return {rows, createdDateCol, closedDateCol, createdByCol, assignedToCol, assignedDeptCol};
+}
+
+function setDropdownOptions(){
+  const createdByCol = getCol(["Created By"]);
+  const assignedToCol = getCol(["Assigned To"]);
+  const assignedDeptCol = getCol(["Assigned To Department"]);
+
+  function fill(sel, values){
+    const el=$(sel);
+    const cur=el.value;
+    el.innerHTML = '<option value="">All</option>' + values.map(v=>`<option value="${v.replace(/"/g,'&quot;')}">${v}</option>`).join("");
+    if ([...el.options].some(o=>o.value===cur)) el.value=cur;
+  }
+
+  // Always fill Created By from full RAW (not filtered)
+  const createdByVals = Array.from(new Set(RAW.map(r=>norm(r[createdByCol])).filter(Boolean))).sort();
+  fill("createdBy", createdByVals);
+
+  // Cascade base for dept + createdBy
+  let base = RAW.slice();
+  if (FILTER.excludeInbound==="yes"){
+    base = base.filter(r=>norm(r[assignedDeptCol]).toLowerCase()!=="inbound");
+  }
+  if (FILTER.createdBy){
+    base = base.filter(r=>norm(r[createdByCol])===FILTER.createdBy);
+  }
+
+  const assignedDeptVals = Array.from(new Set(base.map(r=>norm(r[assignedDeptCol])).filter(Boolean))).sort();
+  fill("assignedDept", assignedDeptVals);
+
+  // If dept chosen, limit Assigned To to that dept; else base
+  let base2 = base.slice();
+  if (FILTER.assignedDept){
+    base2 = base2.filter(r=>norm(r[assignedDeptCol])===FILTER.assignedDept);
+  }
+  const assignedToVals = Array.from(new Set(base2.map(r=>norm(r[assignedToCol])).filter(Boolean))).sort();
+  fill("assignedTo", assignedToVals);
+}
+
+function renderKpis(ctx){
+  const rows = ctx.rows;
+  const closedInRange = rows.filter(isClosed);
+  const openInRange = rows.filter(isOpen);
+
+  const totalCreated = rows.length;
+  const totalClosed = closedInRange.length;
+  const totalOpen = openInRange.length;
+
+  const esc = rows.filter(isEscalation);
+  const nonTech = rows.filter(isNonTech);
+  const refunds = rows.filter(isRefund);
+  const tech = rows.filter(isTech);
+
+  const escOpen = esc.filter(isOpen);
+  const escBreach = escOpen.filter(r=>getAge(r)>5);
+
+  const openAgeBuckets = {"≤7":0,"8–30":0,">30":0};
+  openInRange.forEach(r=>{ openAgeBuckets[bucketAge7_30(getAge(r))]++; });
+
+  // Top receiving / pending department (Assigned To Department)
+  const deptCol = getCol(["Assigned To Department"]);
+  const deptAll = groupCounts(rows, r=>norm(r[deptCol]));
+  const deptOpen = groupCounts(openInRange, r=>norm(r[deptCol]));
+  function topKey(map){
+    let best=["—",0];
+    for (const [k,list] of map.entries()){
+      if (list.length > best[1]) best=[k,list.length];
+    }
+    return best;
+  }
+  const [topRecvDept, topRecvCnt] = topKey(deptAll);
+  const [topPendDept, topPendCnt] = topKey(deptOpen);
+
+  const escAge30Pct = pct(escOpen.filter(r=>bucketAge7_30(getAge(r))==">30").length, escOpen.length||1);
+  const nonTechOpen = nonTech.filter(isOpen);
+  const nonTechAge30Pct = pct(nonTechOpen.filter(r=>bucketAge7_30(getAge(r))==">30").length, nonTechOpen.length||1);
+
+  const kpiData = [
+    {k:"Overall Tickets (Created)", v:fmtInt(totalCreated), s:"Pending + Closed"},
+    {k:"Tickets Closed", v:fmtInt(totalClosed), s:`${pct(totalClosed,totalCreated)} closed`},
+    {k:"Open / Pending", v:fmtInt(totalOpen), s:`${pct(totalOpen,totalCreated)} open`},
+    {k:"Top Ticket Receiving Dept", v:safeText(topRecvDept), s:`${fmtInt(topRecvCnt)} tickets`},
+    {k:"Top Ticket Pending Dept", v:safeText(topPendDept), s:`${fmtInt(topPendCnt)} open`},
+
+    {k:"Tech Tickets", v:fmtInt(tech.length), s:`${pct(tech.length,totalCreated)} of created`},
+    {k:"Non-Tech Tickets", v:fmtInt(nonTech.length), s:`${pct(nonTech.length,totalCreated)} of created`},
+    {k:"Refund Tickets", v:fmtInt(refunds.length), s:`${pct(refunds.length,totalCreated)} of created`},
+    {k:"Escalation Tickets", v:fmtInt(esc.length), s:`${pct(esc.length,totalCreated)} of created`},
+
+    {k:"Open Ageing ≤7", v:fmtInt(openAgeBuckets["≤7"]), s:`${pct(openAgeBuckets["≤7"], totalOpen||1)} of open`},
+    {k:"Open Ageing 8–30", v:fmtInt(openAgeBuckets["8–30"]), s:`${pct(openAgeBuckets["8–30"], totalOpen||1)} of open`},
+    {k:"Open Ageing >30", v:fmtInt(openAgeBuckets[">30"]), s:`${pct(openAgeBuckets[">30"], totalOpen||1)} of open`},
+
+    {k:"Escalation Open >5d (TAT)", v:fmtInt(escBreach.length), s:"highlight in popup"},
+    {k:"Escalation Open >30 %", v:escAge30Pct, s:"of escalation open"},
+    {k:"Non-Tech Open >30 %", v:nonTechAge30Pct, s:"of non-tech open"},
+  ];
+
+  $("kpis").innerHTML = kpiData.map(x=>`
+    <div class="kpi">
+      <div class="k">${x.k}</div>
+      <div class="v">${x.v}</div>
+      <div class="s">${x.s}</div>
+    </div>`).join("");
+
+  $("overallMini").innerHTML = `
+    <div class="kpiGrid">
+      <div class="kpi"><div class="k">Created</div><div class="v">${fmtInt(totalCreated)}</div><div class="s">${pct(totalCreated,totalCreated)}</div></div>
+      <div class="kpi"><div class="k">Closed</div><div class="v">${fmtInt(totalClosed)}</div><div class="s">${pct(totalClosed,totalCreated)}</div></div>
+      <div class="kpi"><div class="k">Open</div><div class="v">${fmtInt(totalOpen)}</div><div class="s">${pct(totalOpen,totalCreated)}</div></div>
+      <div class="kpi"><div class="k">Escalation Open >5d</div><div class="v">${fmtInt(escBreach.length)}</div><div class="s">TAT breach</div></div>
+    </div>
+  `;
+}
+
+function renderTeamAndCat(ctx){
+  const rows = ctx.rows;
+
+  // Team table (Created by Department if exists, else Assigned To Department)
+  const teamCol = getCol(["Created by Department","Created By Department","Created Department"]) || getCol(["Assigned To Department"]);
+  const map = groupCounts(rows, r=>norm(r[teamCol]));
+  const out = [];
+  for (const [k, list] of map.entries()){
+    const closed = list.filter(isClosed).length;
+    const open = list.length - closed;
+    out.push([k, fmtInt(list.length), fmtInt(closed), fmtInt(open), pct(closed,list.length)]);
+  }
+  out.sort((a,b)=>Number(b[1].replace(/,/g,''))-Number(a[1].replace(/,/g,'')));
+  $("teamTbl").innerHTML = tableFromRows(["Team","Created","Closed","Open","Closed %"], out);
+
+  // Category split
+  const cat = [
+    ["Tech", rows.filter(isTech).length],
+    ["Non-Tech", rows.filter(isNonTech).length],
+    ["Refund", rows.filter(isRefund).length],
+  ];
+  const catRows = cat.map(([k,c])=>[k, fmtInt(c), pct(c, rows.length||1)]);
+  $("catTbl").innerHTML = tableFromRows(["Category","Count","%"], catRows);
+
+  // Category ageing (open)
+  const openRows = rows.filter(isOpen);
+  function catAge(label, fn){
+    const list = openRows.filter(fn);
+    const b={"≤7":0,"8–30":0,">30":0};
+    list.forEach(r=>b[bucketAge7_30(getAge(r))]++);
+    return [label, fmtInt(list.length), fmtInt(b["≤7"]), fmtInt(b["8–30"]), fmtInt(b[">30"]), pct(b[">30"], list.length||1)];
+  }
+  const catAgeRows = [
+    catAge("Tech", isTech),
+    catAge("Non-Tech", isNonTech),
+    catAge("Refund", isRefund),
+  ];
+  const catAgeTbl = $("catAgeTbl");
+  if (catAgeTbl) catAgeTbl.innerHTML = tableFromRows(["Category (Open)","Open","≤7","8–30",">30",">30 %"], catAgeRows);
+
+  // Assigned To overall
+  const assToCol = getCol(["Assigned To"]);
+  const assDeptCol = getCol(["Assigned To Department"]);
+
+  function overallBy(col, tableId, label){
+    const mm = groupCounts(rows, r=>norm(r[col]));
+    const out2=[];
+    for (const [k,list] of mm.entries()){
+      const closed=list.filter(isClosed).length;
+      const open=list.length-closed;
+      out2.push([k, fmtInt(list.length), fmtInt(open), fmtInt(closed), pct(closed,list.length)]);
+    }
+    out2.sort((a,b)=>Number(b[2].replace(/,/g,''))-Number(a[2].replace(/,/g,'')));
+    const el = $(tableId);
+    if (el) el.innerHTML = tableFromRows([label,"Created","Open","Closed","Closed %"], out2.slice(0,20));
+  }
+
+  overallBy(assToCol, "assToOverallTbl", "Assigned To");
+  overallBy(assDeptCol, "assDeptOverallTbl", "Assigned Dept");
+}
+
+function renderDayWeek(ctx){
+  const rows = ctx.rows;
+  const createdDateCol = ctx.createdDateCol;
+  const closedDateCol = ctx.closedDateCol;
+
+  // helper: open as of date (end of day)
+  function openAsOf(r, asOf){
+    const cd = parseDate(r[createdDateCol]);
+    if (!cd || cd > asOf) return false;
+
+    const status2 = norm(r[getCol(["Status 2","Status2","Status_2"])]);
+    const cld = parseDate(r[closedDateCol]);
+
+    if (status2.toLowerCase()==="closed"){
+      if (!cld) return false;
+      return cld > asOf; // closed after asOf => still open at asOf
+    }
+    return true;
+  }
+
+  // -------- Day-wise (within selected date range) --------
+  const dayMap = new Map();
+  rows.forEach(r=>{
+    const cd = parseDate(r[createdDateCol]);
+    if(!cd) return;
+    const key = ymd(cd);
+    if(!dayMap.has(key)) dayMap.set(key, {new:0, closed:0, openEnd:0, remaining:0});
+    dayMap.get(key).new += 1;
+  });
+
+  // count closed per day
+  rows.forEach(r=>{
+    const status2 = norm(r[getCol(["Status 2","Status2","Status_2"])]);
+    if(status2.toLowerCase()!=="closed") return;
+    const cld = parseDate(r[closedDateCol]);
+    if(!cld) return;
+    const key = ymd(cld);
+    if(!dayMap.has(key)) dayMap.set(key, {new:0, closed:0, openEnd:0, remaining:0});
+    dayMap.get(key).closed += 1;
+  });
+
+  // compute openEnd and remaining per day
+  const dayKeys = Array.from(dayMap.keys()).sort();
+  dayKeys.forEach(k=>{
+    const end = new Date(k + "T23:59:59");
+    let openEnd=0, remaining=0;
+    rows.forEach(r=>{
+      if(openAsOf(r,end)){
+        openEnd++;
+        const cd = parseDate(r[createdDateCol]);
+        if(cd && ymd(cd)===k) remaining++; // created today and still open end of day
+      }
+    });
+    dayMap.get(k).openEnd = openEnd;
+    dayMap.get(k).remaining = remaining;
+  });
+
+  const dayOut = dayKeys.map(k=>{
+    const d = dayMap.get(k);
+    return [formatDDMMYYYY(new Date(k+"T00:00:00")), fmtInt(d.new), fmtInt(d.closed), fmtInt(d.openEnd), fmtInt(d.remaining)];
+  });
+  $("dayTbl").innerHTML = tableFromRows(["Day","New","Closed","Open (End)","Remaining"], dayOut);
+
+  // -------- Week-wise (Mon–Sun) --------
+  function weekStartMon(d){
+    const x = new Date(d);
+    const day = x.getDay(); // 0 Sun .. 6 Sat
+    const diff = (day===0 ? -6 : 1-day); // shift to Monday
+    x.setDate(x.getDate()+diff);
+    x.setHours(0,0,0,0);
+    return x;
+  }
+  function weekEndSun(ws){
+    const we = new Date(ws);
+    we.setDate(we.getDate()+6);
+    we.setHours(23,59,59,999);
+    return we;
+  }
+  function weekLabel(ws){
+    const we = weekEndSun(ws);
+    return formatDDMMYYYY(ws) + " - " + formatDDMMYYYY(new Date(we.getFullYear(), we.getMonth(), we.getDate()));
+  }
+
+  // Determine week buckets based on created/closed dates of rows in range
+  const wkSet = new Set();
+  rows.forEach(r=>{
+    const cd = parseDate(r[createdDateCol]);
+    if(cd) wkSet.add(ymd(weekStartMon(cd)));
+    const status2 = norm(r[getCol(["Status 2","Status2","Status_2"])]);
+    if(status2.toLowerCase()==="closed"){
+      const cld = parseDate(r[closedDateCol]);
+      if(cld) wkSet.add(ymd(weekStartMon(cld)));
+    }
+  });
+
+  const wkKeys = Array.from(wkSet.keys()).sort(); // ymd of weekStart
+  const wkOut = wkKeys.map(wkKey=>{
+    const ws = new Date(wkKey + "T00:00:00");
+    const we = weekEndSun(ws);
+
+    // New in week
+    let newCnt=0, closedCnt=0, openEndCnt=0, remainingCnt=0;
+
+    rows.forEach(r=>{
+      const cd = parseDate(r[createdDateCol]);
+      const cld = parseDate(r[closedDateCol]);
+      const status2 = norm(r[getCol(["Status 2","Status2","Status_2"])]).toLowerCase();
+
+      if(cd && cd>=ws && cd<=we) newCnt++;
+
+      if(status2==="closed" && cld && cld>=ws && cld<=we) closedCnt++;
+
+      const isOpenEnd = openAsOf(r,we);
+      if(isOpenEnd) openEndCnt++;
+
+      if(cd && cd>=ws && cd<=we && isOpenEnd) remainingCnt++; // created in week and still open at week end
+    });
+
+    return [weekLabel(ws), fmtInt(newCnt), fmtInt(closedCnt), fmtInt(openEndCnt), fmtInt(remainingCnt)];
+  });
+
+  // Sort descending by week start
+  wkOut.sort((a,b)=>{
+    // parse left date from label dd-mm-yyyy
+    const a0 = a[0].split(" - ")[0].split("-").reverse().join("-");
+    const b0 = b[0].split(" - ")[0].split("-").reverse().join("-");
+    return (a0<b0)?1:(a0>b0?-1:0);
+  });
+
+  $("weekTbl").innerHTML = tableFromRows(["Week (Mon–Sun)","New","Closed","Open (End)","Remaining"], wkOut);
+}
+
+function renderAgeingTables(ctx){
+  const rows = ctx.rows.filter(isOpen);
+  const deptCol = getCol(["Assigned To Department"]);
+  const assCol = getCol(["Assigned To"]);
+
+  function build(keyCol){
+    const map = groupCounts(rows, r=>norm(r[keyCol]));
+    const out=[];
+    for (const [k,list] of map.entries()){
+      const b={"≤7":0,"8–30":0,">30":0};
+      list.forEach(r=>b[bucketAge7_30(getAge(r))]++);
+      const tot=list.length;
+      out.push([k, fmtInt(tot), fmtInt(b["≤7"]), fmtInt(b["8–30"]), fmtInt(b[">30"])]);
+    }
+    out.sort((a,b)=>Number(b[1].replace(/,/g,''))-Number(a[1].replace(/,/g,'')));
+    return out;
+  }
+  $("deptAgeTbl").innerHTML = tableFromRows(["Department","Open","≤7","8–30",">30"], build(deptCol));
+  $("assAgeTbl").innerHTML = tableFromRows(["Assigned To","Open","≤7","8–30",">30"], build(assCol));
+}
+
+function periodCounts(rows, dateCol, now){
+  const today = new Date(now); today.setHours(0,0,0,0);
+  const wStart = startOfWeek(today);
+  const mStart = startOfMonth(today);
+  const qStart = startOfQuarter(today);
+  const yStart = startOfYear(today);
+
+  let ftd=0,wtd=0,mtd=0,qtd=0,ytd=0;
+  rows.forEach(r=>{
+    const d=parseDate(r[dateCol]); if(!d) return;
+    const dd=new Date(d); dd.setHours(0,0,0,0);
+    if (dd.getTime()===today.getTime()) ftd++;
+    if (dd>=wStart && dd<=today) wtd++;
+    if (dd>=mStart && dd<=today) mtd++;
+    if (dd>=qStart && dd<=today) qtd++;
+    if (dd>=yStart && dd<=today) ytd++;
+  });
+  return {ftd,wtd,mtd,qtd,ytd};
+}
+
+
+function renderAgentTables(ctx){
+  const rows = ctx.rows;
+  const createdDateCol = ctx.createdDateCol;
+  const closedDateCol = ctx.closedDateCol;
+
+  const end = FILTER.to ? new Date(FILTER.to) : new Date();
+  end.setHours(23,59,59,999);
+  const endDay = new Date(end);
+
+  const ftdStart = new Date(end); ftdStart.setHours(0,0,0,0);
+  const wtdStart = startOfWeek(new Date(end));
+  const mtdStart = startOfMonth(new Date(end));
+
+  function openAsOf(r, asOf){
+    const cd = parseDate(r[createdDateCol]);
+    if (!cd || cd > asOf) return false;
+
+    const status2 = norm(r[getCol(["Status 2","Status2","Status_2"])]);
+    const cld = parseDate(r[closedDateCol]);
+
+    if (status2.toLowerCase()==="closed"){
+      if (!cld) return false;
+      return cld > asOf;
+    }
+    return true;
+  }
+
+  function countNew(list, start, end){
+    return list.filter(r=>{
+      const d=parseDate(r[createdDateCol]);
+      return d && d>=start && d<=end;
+    }).length;
+  }
+
+  function countClosed(list, start, end){
+    return list.filter(r=>{
+      const status2 = norm(r[getCol(["Status 2","Status2","Status_2"])]);
+      if (status2.toLowerCase()!=="closed") return false;
+      const d=parseDate(r[closedDateCol]);
+      return d && d>=start && d<=end;
+    }).length;
+  }
+
+  function countOutstanding(list, asOf){
+    return list.filter(r=>openAsOf(r, asOf)).length;
+  }
+
+  function countRemaining(list, start, end, asOf){
+    return list.filter(r=>{
+      const d=parseDate(r[createdDateCol]);
+      return d && d>=start && d<=end && openAsOf(r, asOf);
+    }).length;
+  }
+
+  function build(groupCol){
+    const map = groupCounts(rows, r=>norm(r[groupCol]));
+    const out=[];
+    for (const [k,list] of map.entries()){
+      const outstanding = countOutstanding(list, endDay);
+
+      function pack(start){
+        const n = countNew(list, start, endDay);
+        const cl = countClosed(list, start, endDay);
+        const rem = countRemaining(list, start, endDay, endDay);
+        return [fmtInt(outstanding), fmtInt(n), fmtInt(cl), fmtInt(rem)];
+      }
+
+      out.push([
+        k,
+        ...pack(ftdStart),
+        ...pack(wtdStart),
+        ...pack(mtdStart)
+      ]);
+    }
+    return out;
+  }
+
+  const hdr = ["Name","FTD Open","FTD New","FTD Closed","FTD Remain","WTD Open","WTD New","WTD Closed","WTD Remain","MTD Open","MTD New","MTD Closed","MTD Remain"];
+
+  $("agentAssignedToTbl").innerHTML = tableFromRows(hdr, build(ctx.assignedToCol));
+  $("teamWideTbl").innerHTML = tableFromRows(hdr, build(ctx.assignedDeptCol));
+}
+function renderQuality(ctx){
+  const rows = ctx.rows;
+  const csatCol = getCol(["C-SAT","CSAT","C SAT"]);
+  const ratings = rows.map(r=>toNum(r[csatCol])).filter(v=>v!==null);
+  const surveyCount = ratings.length;
+
+  const csatCount = ratings.filter(v=>[8,9,10].includes(v)).length;
+  const dsatCount = ratings.filter(v=>v>=0 && v<=7).length;
+
+  const promoters = ratings.filter(v=>v>=9 && v<=10).length;
+  const passives = ratings.filter(v=>v>=7 && v<=8).length;
+  const detractors = ratings.filter(v=>v>=0 && v<=6).length;
+
+  const closed = rows.filter(isClosed);
+  const closedWithCSAT = closed.filter(r=>toNum(r[csatCol])!==null).length;
+
+  $("qualityBox").innerHTML = `
+    <div class="kpiGrid">
+      <div class="kpi"><div class="k">Total Survey Count</div><div class="v">${fmtInt(surveyCount)}</div><div class="s">rows with CSAT</div></div>
+      <div class="kpi"><div class="k">CSAT Count (8–10)</div><div class="v">${fmtInt(csatCount)}</div><div class="s">${pct(csatCount,surveyCount||1)} CSAT</div></div>
+      <div class="kpi"><div class="k">DSAT Count (0–7)</div><div class="v">${fmtInt(dsatCount)}</div><div class="s">${pct(dsatCount,surveyCount||1)} DSAT</div></div>
+      <div class="kpi"><div class="k">Closed → CSAT</div><div class="v">${fmtInt(closedWithCSAT)}</div><div class="s">${pct(closedWithCSAT, closed.length||1)} of closed</div></div>
+
+      <div class="kpi"><div class="k">Promoter (9–10)</div><div class="v">${fmtInt(promoters)}</div><div class="s">${pct(promoters,surveyCount||1)}</div></div>
+      <div class="kpi"><div class="k">Passive (7–8)</div><div class="v">${fmtInt(passives)}</div><div class="s">${pct(passives,surveyCount||1)}</div></div>
+      <div class="kpi"><div class="k">Detractor (0–6)</div><div class="v">${fmtInt(detractors)}</div><div class="s">${pct(detractors,surveyCount||1)}</div></div>
+      <div class="kpi"><div class="k">Overall NPS Count</div><div class="v">${fmtInt(surveyCount)}</div><div class="s">Prom/Pass/Det split</div></div>
+    </div>
+  `;
+}
+
+function renderEsc(ctx){
+  const rows = ctx.rows;
+  const esc = rows.filter(isEscalation);
+  const escOpen = esc.filter(isOpen);
+  const escBreach = escOpen.filter(r=>getAge(r)>5);
+
+  const byType = groupCounts(esc, r=>escType(r));
+  const out=[];
+  for (const [k,list] of byType.entries()){
+    const open=list.filter(isOpen).length;
+    const closed=list.length-open;
+    const breach=list.filter(r=>isOpen(r)&&getAge(r)>5).length;
+    out.push([k, fmtInt(list.length), fmtInt(open), fmtInt(closed), fmtInt(breach)]);
+  }
+  out.sort((a,b)=>Number(b[1].replace(/,/g,''))-Number(a[1].replace(/,/g,'')));
+
+  $("escBox").innerHTML = `
+    <div class="kpiGrid">
+      <div class="kpi"><div class="k">Escalation Created</div><div class="v">${fmtInt(esc.length)}</div><div class="s">${pct(esc.length, rows.length||1)} of created</div></div>
+      <div class="kpi"><div class="k">Escalation Open</div><div class="v">${fmtInt(escOpen.length)}</div><div class="s">${pct(escOpen.length, esc.length||1)} open</div></div>
+      <div class="kpi"><div class="k">Escalation Open >5d</div><div class="v">${fmtInt(escBreach.length)}</div><div class="s">TAT breach</div></div>
+      <div class="kpi"><div class="k">Esc Breach %</div><div class="v">${pct(escBreach.length, escOpen.length||1)}</div><div class="s">of escalation open</div></div>
+    </div>
+    <div style="margin-top:10px;overflow:auto">
+      <table>${tableFromRows(["Source","Created","Open","Closed","Open >5d"], out)}</table>
+    </div>
+  `;
+}
+
+function renderMoney(ctx){
+  const rows = ctx.rows;
+  const budgetProvidedCol = getCol(["Budget provided","Budget Provided"]);
+  const budgetUtilCol = getCol(["Budget utilized","Budget Utilized"]);
+  const budgetRemainCol = getCol(["Budget remaining","Budget Remaining"]);
+  const addBudgetCol = getCol(["Additional budget required","Additional Budget Required"]);
+  const revenueCol = getCol(["Revenue generated","Revenue Generated","Revenue"]);
+
+  function sumCol(col){
+    if(!col) return 0;
+    let s=0;
+    rows.forEach(r=>{ const v=toNum(r[col]); if(v!==null) s+=v; });
+    return s;
+  }
+
+  const bp=sumCol(budgetProvidedCol);
+  const bu=sumCol(budgetUtilCol);
+  const br=sumCol(budgetRemainCol);
+  const ab=sumCol(addBudgetCol);
+  const rev=sumCol(revenueCol);
+
+  $("moneyBox").innerHTML = `
+    <div class="kpiGrid">
+      <div class="kpi"><div class="k">Budget Provided</div><div class="v">${fmtMoney(bp)}</div><div class="s">sum</div></div>
+      <div class="kpi"><div class="k">Budget Utilized</div><div class="v">${fmtMoney(bu)}</div><div class="s">sum</div></div>
+      <div class="kpi"><div class="k">Budget Remaining</div><div class="v">${fmtMoney(br)}</div><div class="s">sum</div></div>
+      <div class="kpi"><div class="k">Additional Budget</div><div class="v">${fmtMoney(ab)}</div><div class="s">sum</div></div>
+      <div class="kpi"><div class="k">Revenue Generated</div><div class="v">${fmtMoney(rev)}</div><div class="s">sum</div></div>
+    </div>
+  `;
+}
+
+function renderEvents(ctx){
+  const rows = ctx.rows;
+  const itrustSch = getCol(["Itrust schedule","Itrust Schedule","Itrust Scheduled","Itrust"]);
+  const itrustCon = getCol(["Itrust conducted","Itrust Conducted","Itrust Completed"]);
+  const ccleSch = getCol(["CCLE schedule","CCLE Schedule","CCLE Scheduled","CCLE"]);
+  const ccleCon = getCol(["CCLE conducted","CCLE Conducted","CCLE Completed"]);
+
+  function sumYes(col){
+    if(!col) return 0;
+    let c=0;
+    rows.forEach(r=>{
+      const v = norm(r[col]).toLowerCase();
+      if (v==="1"||v==="yes"||v==="y"||v==="true"||v==="done"||v==="conducted") c++;
+      else if (toNum(v)!==null && toNum(v)>0) c++;
+    });
+    return c;
+  }
+
+  const iS=sumYes(itrustSch), iC=sumYes(itrustCon), cS=sumYes(ccleSch), cC=sumYes(ccleCon);
+
+  $("eventBox").innerHTML = `
+    <div class="kpiGrid section-itrust">
+      <div class="kpi"><div class="k">Itrust Scheduled</div><div class="v">${fmtInt(iS)}</div><div class="s">count</div></div>
+      <div class="kpi"><div class="k">Itrust Conducted</div><div class="v">${fmtInt(iC)}</div><div class="s">count</div></div>
+      <div class="kpi"><div class="k">CCLE Scheduled</div><div class="v">${fmtInt(cS)}</div><div class="s">count</div></div>
+      <div class="kpi"><div class="k">CCLE Conducted</div><div class="v">${fmtInt(cC)}</div><div class="s">count</div></div>
+    </div>
+  `;
+}
+
+function buildBreaches(ctx){
+  const rows = ctx.rows.filter(r=>isEscalation(r) && isOpen(r) && getAge(r)>5);
+  const idCol = getCol(["New Ticket Id","Ticket Id","New Ticket ID"]);
+  const createdCol = ctx.createdDateCol;
+  const assToCol = ctx.assignedToCol;
+  const assDeptCol = getCol(["Assigned To Department"]);
+  const cat2Col = getCol(["Category 2"]);
+
+  const out = rows.map(r=>[
+    safeText(r[idCol]||""),
+    escType(r),
+    safeText(r[assDeptCol]||""),
+    safeText(r[assToCol]||""),
+    safeText(r[cat2Col]||""),
+    safeText(ymd(parseDate(r[createdCol])||new Date())),
+    fmtInt(getAge(r))
+  ]);
+
+  $("breachMeta").textContent = `${rows.length} open escalation tickets are above 5 days (TAT breach).`;
+  $("breachTbl").innerHTML = tableFromRows(["Ticket","Source","Department","Assigned To","Category 2","Created Date","Age (days)"], out);
+}
+
+function renderAll(){
+  if (!RAW.length) return;
+  setDropdownOptions();
+  const ctx = applyFilters();
+  renderKpis(ctx);
+  renderTeamAndCat(ctx);
+  renderDayWeek(ctx);
+  renderAgeingTables(ctx);
+  renderAgentTables(ctx);
+  renderQuality(ctx);
+  renderEsc(ctx);
+  renderMoney(ctx);
+  renderEvents(ctx);
+  buildBreaches(ctx);
+}
+
+function setRange(from, to){
+  FILTER.from = from; FILTER.to = to;
+  $("from").value = from ? ymd(from) : "";
+  $("to").value = to ? ymd(to) : "";
+  $("createdBy").onchange = (e)=>{
+    FILTER.createdBy = e.target.value;
+    // reset downstream filters
+    FILTER.assignedDept = ""; $("assignedDept").value="";
+    FILTER.assignedTo = ""; $("assignedTo").value="";
+    setDropdownOptions();
+    renderAll();
+  };
+  $("assignedDept").onchange = (e)=>{
+    FILTER.assignedDept = e.target.value;
+    FILTER.assignedTo = ""; $("assignedTo").value="";
+    setDropdownOptions();
+    renderAll();
+  };
+  $("assignedTo").onchange = (e)=>{ FILTER.assignedTo=e.target.value; renderAll(); };
+  $("excludeInbound").onchange = (e)=>{
+    FILTER.excludeInbound = e.target.value;
+    FILTER.assignedDept = ""; $("assignedDept").value="";
+    FILTER.assignedTo = ""; $("assignedTo").value="";
+    setDropdownOptions();
+    renderAll();
+  };
+
+  renderAll();
+}
+
+function pickPreset(preset){
+  const t=new Date(); t.setHours(0,0,0,0);
+  const t2=new Date(t); t2.setHours(23,59,59,999);
+  if (preset==="day") setRange(new Date(t), new Date(t2));
+  if (preset==="wtd") setRange(startOfWeek(t), new Date(t2));
+  if (preset==="mtd") setRange(startOfMonth(t), new Date(t2));
+  if (preset==="qtd") setRange(startOfQuarter(t), new Date(t2));
+  if (preset==="ytd") setRange(startOfYear(t), new Date(t2));
+}
+
+function highlightPreset(btnId){
+  ["btnDay","btnWTD","btnMTD","btnQTD","btnYTD"].forEach(id=>$(id).classList.remove("primary"));
+  $(btnId).classList.add("primary");
+}
+
+function readWorkbook(arrayBuffer){
+  const wb = XLSX.read(arrayBuffer, {type:"array"});
+  const sheetName = wb.SheetNames[0];
+  const ws = wb.Sheets[sheetName];
+  const json = XLSX.utils.sheet_to_json(ws, {defval:""});
+  return json;
+}
+
+async function handleFile(file){
+  $("fileStatus").textContent = `Loading: ${file.name}`;
+  const ext = file.name.split('.').pop().toLowerCase();
+
+  if (ext === "csv"){
+    const text = await file.text();
+    const rows = parseCSV(text);
+    const headers = rows.shift().map(h=>h.trim());
+    RAW = rows.map(r=>{
+      const o={};
+      headers.forEach((h,i)=>o[h]=r[i]??"");
+      return o;
+    });
+    COLS = headers;
+    $("offlineNote").style.display="none";
+    afterLoad();
+    return;
+  }
+
+  if (typeof XLSX === "undefined"){
+    $("offlineNote").style.display="";
+    $("fileStatus").textContent = `XLSX library blocked. Please upload CSV instead.`;
+    return;
+  }
+  $("offlineNote").style.display="none";
+  const buf = await file.arrayBuffer();
+  RAW = readWorkbook(buf);
+  COLS = RAW.length ? Object.keys(RAW[0]) : [];
+  afterLoad();
+}
+
+function afterLoad(){
+  const createdDateCol = getCol(["Ticket Created Date"]);
+  const dates = RAW.map(r=>parseDate(r[createdDateCol])).filter(Boolean).sort((a,b)=>a-b);
+
+  if (!dates.length){
+    $("fileStatus").textContent = `Loaded ${RAW.length.toLocaleString('en-IN')} rows (no dates found)`;
+    FILTER.from = null; FILTER.to = null;
+  } else {
+    FILTER.from = new Date(dates[0]); FILTER.from.setHours(0,0,0,0);
+    FILTER.to = new Date(dates[dates.length-1]); FILTER.to.setHours(23,59,59,999);
+    $("from").value = ymd(FILTER.from); $("to").value = ymd(FILTER.to);
+    $("fileStatus").textContent = `Loaded ${RAW.length.toLocaleString('en-IN')} rows • Date: ${formatDDMMYYYY(FILTER.from)} to ${formatDDMMYYYY(FILTER.to)}`;
+  }
+
+    
+    
+  $("createdBy").onchange = (e)=>{
+    FILTER.createdBy = e.target.value;
+    // reset downstream filters
+    FILTER.assignedDept = ""; $("assignedDept").value="";
+    FILTER.assignedTo = ""; $("assignedTo").value="";
+    setDropdownOptions();
+  
+  // table filters
+  attachTableFilter('agentAssignedToFilter','agentAssignedToTbl');
+  attachTableFilter('teamWideFilter','teamWideTbl');
+  attachTableFilter('dayFilter','dayTbl');
+  attachTableFilter('weekFilter','weekTbl');
+  attachTableFilter('deptAgeFilter','deptAgeTbl');
+  attachTableFilter('assToAgeFilter','assToAgeTbl');
+  attachTableFilter('catFilter','catTbl');
+  attachTableFilter('catAgeFilter','catAgeTbl');
+  attachTableFilter('assToOverallFilter','assToOverallTbl');
+  attachTableFilter('assDeptOverallFilter','assDeptOverallTbl');
+
+  renderAll();
+  };
+  $("assignedDept").onchange = (e)=>{
+    FILTER.assignedDept = e.target.value;
+    FILTER.assignedTo = ""; $("assignedTo").value="";
+    setDropdownOptions();
+  
+  // table filters
+  attachTableFilter('agentAssignedToFilter','agentAssignedToTbl');
+  attachTableFilter('teamWideFilter','teamWideTbl');
+  attachTableFilter('dayFilter','dayTbl');
+  attachTableFilter('weekFilter','weekTbl');
+  attachTableFilter('deptAgeFilter','deptAgeTbl');
+  attachTableFilter('assToAgeFilter','assToAgeTbl');
+  attachTableFilter('catFilter','catTbl');
+  attachTableFilter('catAgeFilter','catAgeTbl');
+  attachTableFilter('assToOverallFilter','assToOverallTbl');
+  attachTableFilter('assDeptOverallFilter','assDeptOverallTbl');
+
+  renderAll();
+  };
+  $("assignedTo").onchange = (e)=>{ FILTER.assignedTo=e.target.value; renderAll(); };
+  $("excludeInbound").onchange = (e)=>{
+    FILTER.excludeInbound = e.target.value;
+    FILTER.assignedDept = ""; $("assignedDept").value="";
+    FILTER.assignedTo = ""; $("assignedTo").value="";
+    setDropdownOptions();
+  
+  // table filters
+  attachTableFilter('agentAssignedToFilter','agentAssignedToTbl');
+  attachTableFilter('teamWideFilter','teamWideTbl');
+  attachTableFilter('dayFilter','dayTbl');
+  attachTableFilter('weekFilter','weekTbl');
+  attachTableFilter('deptAgeFilter','deptAgeTbl');
+  attachTableFilter('assToAgeFilter','assToAgeTbl');
+  attachTableFilter('catFilter','catTbl');
+  attachTableFilter('catAgeFilter','catAgeTbl');
+  attachTableFilter('assToOverallFilter','assToOverallTbl');
+  attachTableFilter('assDeptOverallFilter','assDeptOverallTbl');
+
+  renderAll();
+  };
+
+
+  // table filters
+  attachTableFilter('agentAssignedToFilter','agentAssignedToTbl');
+  attachTableFilter('teamWideFilter','teamWideTbl');
+  attachTableFilter('dayFilter','dayTbl');
+  attachTableFilter('weekFilter','weekTbl');
+  attachTableFilter('deptAgeFilter','deptAgeTbl');
+  attachTableFilter('assToAgeFilter','assToAgeTbl');
+  attachTableFilter('catFilter','catTbl');
+  attachTableFilter('catAgeFilter','catAgeTbl');
+  attachTableFilter('assToOverallFilter','assToOverallTbl');
+  attachTableFilter('assDeptOverallFilter','assDeptOverallTbl');
+
+  renderAll();
+}
+
+document.addEventListener("DOMContentLoaded", ()=>{
+  $("tatBtn").onclick = ()=>{ $("modalBack").style.display="flex"; };
+  $("closeModal").onclick = ()=>{ $("modalBack").style.display="none"; };
+  $("modalBack").addEventListener("click",(e)=>{ if(e.target.id==="modalBack") $("modalBack").style.display="none"; });
+
+  $("btnDay").onclick=()=>{ highlightPreset("btnDay"); pickPreset("day"); };
+  $("btnWTD").onclick=()=>{ highlightPreset("btnWTD"); pickPreset("wtd"); };
+  $("btnMTD").onclick=()=>{ highlightPreset("btnMTD"); pickPreset("mtd"); };
+  $("btnQTD").onclick=()=>{ highlightPreset("btnQTD"); pickPreset("qtd"); };
+  $("btnYTD").onclick=()=>{ highlightPreset("btnYTD"); pickPreset("ytd"); };
+
+  $("apply").onclick=()=>{
+    const f = $("from").value ? new Date($("from").value) : null;
+    const t = $("to").value ? new Date($("to").value) : null;
+    if (f) f.setHours(0,0,0,0);
+    if (t) t.setHours(23,59,59,999);
+    FILTER.from=f; FILTER.to=t;
+    renderAll();
+  };
+
+  $("file").addEventListener("change",(e)=>{
+    const file=e.target.files && e.target.files[0];
+    if(file) handleFile(file);
+  });
+
+  $("fileStatus").textContent = "Upload Excel (.xlsx) or CSV (.csv) to load dashboard";
+});
+
+/* ===== Table filter + download helpers ===== */
+function tableToCSV(table){
+  const rows = [...table.querySelectorAll("tr")];
+  return rows.map(r=>{
+    const cols = [...r.querySelectorAll("th,td")].map(c=>{
+      const t = (c.innerText||"").replace(/\r?\n/g," ").trim();
+      return '"' + t.replace(/"/g,'""') + '"';
+    });
+    return cols.join(",");
+  }).join("\n");
+}
+function downloadText(filename, text){
+  const blob = new Blob([text], {type:"text/csv;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+function downloadTableCSV(tableId, filename){
+  const table = $(tableId);
+  if(!table) return;
+  downloadText(filename, tableToCSV(table));
+}
+function attachTableFilter(inputId, tableId){
+  const inp = $(inputId);
+  const tbl = $(tableId);
+  if(!inp || !tbl) return;
+  inp.addEventListener("input", ()=>{
+    const q = inp.value.trim().toLowerCase();
+    const rows = [...tbl.querySelectorAll("tr")];
+    rows.forEach((r,i)=>{
+      if(i===0) return;
+      const txt = (r.innerText||"").toLowerCase();
+      r.style.display = (!q || txt.includes(q)) ? "" : "none";
+    });
+  });
+}
+
+
+/* ===== Full Dashboard Export ===== */
+function downloadFullDashboard(){
+  const tables = document.querySelectorAll("table");
+  let combined = "";
+  tables.forEach((tbl, idx)=>{
+    if(idx>0) combined += "\n\n";
+    combined += tableToCSV(tbl);
+  });
+  downloadText("full_dashboard_report.csv", combined);
+}
+
+</script>
+<h2>Itrust / CCLE</h2>
+          <div id="eventBox"></div>
+          <div class="footerNote">Counts are shown if columns exist (Schedule / Conducted). If your raw data is in a different sheet, export & upload that file too.</div>
+        </div>
+</body>
+</html>
